@@ -11,6 +11,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
 #define BAUDRATE B38400
@@ -119,8 +120,7 @@ int main(int argc, char *argv[])
     buf[5] = '\n';
 
 
-    int bytes = write(fd, buf, BUF_SIZE);
-    printf("%d bytes written\n", bytes);
+    
 
     int fd2 = open(serialPortName, O_RDWR | O_NOCTTY);
 
@@ -137,15 +137,41 @@ int main(int argc, char *argv[])
     // Loop for input
     unsigned char buf2[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     int index = 0;
-    state curState = Other_RCV; 
-    while (STOP == FALSE)//while to read the SET ~A
-    {
+    state curState = Other_RCV;
+
+    //def of alarm vars
+    int alarmEnabled = FALSE;
+    int alarmCount = 0;
+
+    //def of alarmHandler function
+    void alarmHandler(int signal){
+        alarmEnabled = FALSE;
+        alarmCount++;
+        printf("Alarm #%d\n", alarmCount);
+    }
+
+    while (STOP == FALSE && alarmCount<4)//while to read the SET ~A
+    {   
         
-        // Returns after 5 charsADDRESS_SENDER have been input
-        int bytes = read(fd, buf2, 1);
+        
+        if(alarmEnabled==FALSE){
+            alarm(3);
+            alarmEnabled = TRUE;
+            int bytes = write(fd, buf, BUF_SIZE);
+            printf("%d bytes written\n", bytes);
+        }
+        
+        int bytes = read(fd, buf2, 5);
         buf2[bytes] = '\0'; // Set end of string to '\0', so we can printf
-        printf("var = 0x%02X\n", buf2[0]);
-        
+        printf("var = 0x%02X\n", buf2[2]);
+        if(buf2[2]==CONTROL_UA){
+            printf("UA okay! \n");
+            STOP = TRUE;    
+        }
+        else{
+            alarmHandler(3);
+        }
+        /*
         switch(curState){
             case Other_RCV:
                 if(buf2[0]==FLAG){
@@ -193,6 +219,7 @@ int main(int argc, char *argv[])
             case BBC_ok:
                 if(buf2[0]==FLAG){
                     STOP = TRUE;
+                    //alarm(0);
                     printf("tudo certo\n");
                 }
                 else{
@@ -200,6 +227,7 @@ int main(int argc, char *argv[])
                 }
                 break;
         }
+        */
     }
     // Wait until all bytes have been written to the serial port
     sleep(1);
