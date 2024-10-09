@@ -100,103 +100,105 @@ int main(int argc, char *argv[])
     }
 
     printf("New termios structure set\n");
+
+    //to store A and C to later check BCC
     int buf_a_stor;
     int buf_c_stor;
+
     // Loop for input
     unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     int index = 0;
-    state curState = Other_RCV;
-    while (STOP == FALSE)//while to read the SET ~A
-    {
+    state curState = Other_RCV; //initial state
+    int tries = 0;
+    int onStateMachine = TRUE;
+    while(!STOP){
         
-        // Returns after 5 charsADDRESS_SENDER have been input
-        int bytes = read(fd, buf, 1);
+        int bytes = read(fd, buf, 5);
         buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
+            
         printf("var = 0x%02X\n", buf[0]);
-        
-        switch(curState){
-            case Other_RCV:
-                if(buf[0]==FLAG){
-                    curState = FLAG_RCV;
-                }
-                else{
-                    curState = Other_RCV;
-                }
-                break;
-            case FLAG_RCV:
-                if(buf[0]==ADDRESS_SENDER){
-                    curState = A_RCV;
-                    buf_a_stor = buf[0];
-                }
-                else if(buf[0]==FLAG){
-                    curState = FLAG_RCV;
-                }
-                else{
-                    curState = Other_RCV;
-                }
-                break;
-            case A_RCV:
-                if(buf[0]==CONTROL_SET){
-                    curState = C_RCV;
-                    buf_c_stor = buf[0];
-                }
-                else if(buf[0]==FLAG){
-                    curState = FLAG_RCV;
-                }
-                else{
-                    curState = Other_RCV;
-                }
-                break;
-            case C_RCV:
-                if(buf[0]==(buf_a_stor^buf_c_stor)){
-                        curState = BBC_ok;
-                        buf_c_stor = buf[0];
+        printf("var = 0x%02X\n", buf[1]);
+        printf("var = 0x%02X\n", buf[2]);
+        printf("var = 0x%02X\n", buf[3]);
+        printf("var = 0x%02X\n", buf[4]);
+
+        onStateMachine = TRUE;
+        while(onStateMachine){
+            switch(curState){
+                case Other_RCV:
+                    if(buf[0]==FLAG){
+                        curState = FLAG_RCV;
                     }
-                    else if(buf[0]==FLAG){
+                    else{
+                        curState = Other_RCV;
+                        onStateMachine = FALSE;
+                    }
+                    break;
+                case FLAG_RCV:
+                    if(buf[1]==ADDRESS_SENDER){
+                        curState = A_RCV;
+                        buf_a_stor = buf[1];
+                    }
+                    else if(buf[1]==FLAG){
                         curState = FLAG_RCV;
                     }
                     else{
                         curState = Other_RCV;
                     }
                     break;
-            case BBC_ok:
-                if(buf[0]==FLAG){
-                    STOP = TRUE;
-                    printf("tudo certo\n");
+                case A_RCV:
+                    if(buf[2]==CONTROL_SET){
+                        curState = C_RCV;
+                        buf_c_stor = buf[2];
+                    }
+                    else if(buf[2]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case C_RCV:
+                    if(buf[3]==(buf_a_stor^buf_c_stor)){
+                            curState = BBC_ok;
+                        
+                        }
+                        else if(buf[3]==FLAG){
+                            curState = FLAG_RCV;
+                        }
+                        else{
+                            curState = Other_RCV;
+                        }
+                        break;
+                case BBC_ok:
+                    if(buf[4]==FLAG){
+                        //STOP = TRUE;
+                        unsigned char buf2[BUF_SIZE] = {0};
+                        buf2[0] = FLAG;
+                        buf2[1] = ADDRESS_SENDER;
+                        buf2[2] = CONTROL_SET;
+                        buf2[3] = buf2[1]^buf2[2];
+                        buf2[4] = FLAG;
+                        buf2[5] = '\n';
+
+                        int bytes = write(fd, buf2, BUF_SIZE);
+                        printf("\n%d bytes written\n", bytes);
+                        printf("tudo certo\n\n");
+                        curState = Other_RCV;
+                        onStateMachine = FALSE;
+
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                default:
+                    onStateMachine = FALSE;
+                    break;
                 }
-                else{
-                    curState = Other_RCV;
-                }
-                break;
         }
     }
-    
-    
 
-    // The while() cycle should be changed in order to respect the specifications
-    // of the protocol indicated in the Lab guide
-
-
-    //sending UA ~A
-    int fd2 = open(serialPortName, O_RDWR | O_NOCTTY);
-
-    if (fd2 < 0)
-    {
-        perror(serialPortName);
-        exit(-1);
-    }
-
-    unsigned char buf2[BUF_SIZE] = {0};
-    buf2[0] = FLAG;
-    buf2[1] = ADDRESS_SENDER;
-    buf2[2] = CONTROL_UA;
-    buf2[3] = buf2[1]^buf2[2];
-    buf2[4] = FLAG;
-    buf2[5] = '\n';
-
-    int bytes = write(fd, buf2, BUF_SIZE);
-    printf("%d bytes written\n", bytes);
-    
     sleep(1);
     
     
