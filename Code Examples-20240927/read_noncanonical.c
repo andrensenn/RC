@@ -33,6 +33,8 @@ typedef enum{
 #define CONTROL_UA 0x07
 #define ADDRESS_RECEIVER 0x03
 #define ADDRESS_SENDER 0x01
+#define BBC_CHECK_SET (ADDRESS_SENDER^CONTROL_SET)
+#define BBC_CHECK_UA (ADDRESS_SENDER^CONTROL_UA)
 
 volatile int STOP = FALSE;
 
@@ -79,8 +81,8 @@ int main(int argc, char *argv[])
 
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
+    newtio.c_cc[VTIME] = 0.1; // Inter-character timer unused
+    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -108,22 +110,20 @@ int main(int argc, char *argv[])
     // Loop for input
     unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     int index = 0;
-    state curState = Other_RCV; //initial state
-    int tries = 0;
     int onStateMachine = TRUE;
     while(!STOP){
-        
-        int bytes = read(fd, buf, 5);
-        buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
-            
-        printf("var = 0x%02X\n", buf[0]);
-        printf("var = 0x%02X\n", buf[1]);
-        printf("var = 0x%02X\n", buf[2]);
-        printf("var = 0x%02X\n", buf[3]);
-        printf("var = 0x%02X\n", buf[4]);
-
         onStateMachine = TRUE;
+        state curState = Other_RCV; //initial state
         while(onStateMachine){
+            int bytes = read(fd, buf, 1);
+            buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
+            if(buf[0]!=0){
+                printf("var = 0x%02X\n", buf[0]);
+            }
+            else{
+                continue;
+            }
+
             switch(curState){
                 case Other_RCV:
                     if(buf[0]==FLAG){
@@ -135,11 +135,10 @@ int main(int argc, char *argv[])
                     }
                     break;
                 case FLAG_RCV:
-                    if(buf[1]==ADDRESS_SENDER){
+                    if(buf[0]==ADDRESS_SENDER){
                         curState = A_RCV;
-                        buf_a_stor = buf[1];
                     }
-                    else if(buf[1]==FLAG){
+                    else if(buf[0]==FLAG){
                         curState = FLAG_RCV;
                     }
                     else{
@@ -147,11 +146,10 @@ int main(int argc, char *argv[])
                     }
                     break;
                 case A_RCV:
-                    if(buf[2]==CONTROL_SET){
+                    if(buf[0]==CONTROL_SET){
                         curState = C_RCV;
-                        buf_c_stor = buf[2];
                     }
-                    else if(buf[2]==FLAG){
+                    else if(buf[0]==FLAG){
                         curState = FLAG_RCV;
                     }
                     else{
@@ -159,11 +157,11 @@ int main(int argc, char *argv[])
                     }
                     break;
                 case C_RCV:
-                    if(buf[3]==(buf_a_stor^buf_c_stor)){
+                    if(buf[0]==BBC_CHECK_SET){
                             curState = BBC_ok;
-                        
+   
                         }
-                        else if(buf[3]==FLAG){
+                        else if(buf[0]==FLAG){
                             curState = FLAG_RCV;
                         }
                         else{
@@ -171,15 +169,15 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case BBC_ok:
-                    if(buf[4]==FLAG){
+                    if(buf[0]==FLAG){
                         //STOP = TRUE;
                         unsigned char buf2[BUF_SIZE] = {0};
                         buf2[0] = FLAG;
                         buf2[1] = ADDRESS_SENDER;
-                        buf2[2] = CONTROL_SET;
+                        buf2[2] = CONTROL_UA;
                         buf2[3] = buf2[1]^buf2[2];
                         buf2[4] = FLAG;
-                        buf2[5] = '\n';
+                        //buf2[5] = '\n';
 
                         int bytes = write(fd, buf2, BUF_SIZE);
                         printf("\n%d bytes written\n", bytes);
