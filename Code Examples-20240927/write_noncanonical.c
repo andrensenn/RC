@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <termios.h>
+#include <signal.h>
 #include <unistd.h>
 
 
@@ -35,13 +36,28 @@ typedef enum{
 #define CONTROL_UA 0x07
 #define ADDRESS_RECEIVER 0x03
 #define ADDRESS_SENDER 0x01
+#define BBC_CHECK_SET (ADDRESS_SENDER^CONTROL_SET)
+#define BBC_CHECK_UA (ADDRESS_SENDER^CONTROL_UA)
 
 volatile int STOP = FALSE;
+
+//def of alarm vars
+int alarmEnabled = FALSE;
+int alarmCount = 0;
+
+
+void alarmHandler(int signal){
+        alarmEnabled = FALSE;
+        alarmCount++;
+        printf("Alarm #%d\n", alarmCount);
+}
 
 int main(int argc, char *argv[])
 {
     // Program usage: Uses either COM1 or COM2
     const char *serialPortName = argv[1];
+
+    signal(SIGALRM, alarmHandler);
 
     if (argc < 2)
     {
@@ -82,8 +98,8 @@ int main(int argc, char *argv[])
 
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
+    newtio.c_cc[VTIME] = 0.1; // Inter-character timer unused
+    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -113,15 +129,10 @@ int main(int argc, char *argv[])
     buf[2] = CONTROL_SET;
     buf[3] = buf[1] ^ buf[2];
     buf[4] = FLAG;
-
+    buf[5] = '\n';
     // In non-canonical mode, '\n' does not end the writing.
     // Test this condition by placing a '\n' in the middle of the buffer.
     // The whole buffer must be sent even with the '\n'.
-
-
-    //buf[5] = '\n';
-
-
 
     int buf_a_stor;
     int buf_c_stor;
@@ -130,50 +141,96 @@ int main(int argc, char *argv[])
     int index = 0;
     state curState = Other_RCV;
 
-    //def of alarm vars
-    int alarmEnabled = FALSE;
-    int alarmCount = 0;
-
-    //def of alarmHandler function
-    void alarmHandler(int signal){
-        alarmEnabled = FALSE;
-        alarmCount++;
-        printf("Alarm #%d\n", alarmCount);
-    }
-
-    int receivedUA =FALSE;
-
+    //first writting to reader & enabling alarm
+    int bytes = write(fd, buf, 5);
+    printf("%d bytes written\n", bytes);
+    alarm(3);
+    alarmEnabled = TRUE;
+    
     while (STOP == FALSE && alarmCount<4)
     {   
-        
-        //enabling alarm    
-        if(alarmEnabled==FALSE){ 
+        //if alarm not enabled, write again
+        if(alarmEnabled==FALSE){
+            int bytes = write(fd, buf, 5);
+            printf("%d bytes written\n", bytes);
             alarm(3);
             alarmEnabled = TRUE;
         }
-        
-        //if UA not received, write again
-        if(!receivedUA){
-            int bytes = write(fd, buf, 5);
-            printf("%d bytes written\n", bytes);
-        }
-
-        int bytes = read(fd, buf2, 5);
-
-        buf2[bytes] = '\0'; // Set end of string to '\0', so we can printf
-        printf("var = 0x%02X\n", buf2[2]);
-
-        //if UA correctly received, ok!
-        if(buf2[2]==CONTROL_UA){
-            printf("UA okay! \n");
-            STOP = TRUE;    
-            receivedUA = TRUE;
-        }
-        else{
-            alarmHandler(3);
-    
+        //enabling alarm   
+        state curState = Other_RCV; 
+        int onStateMachine = TRUE;
+        while(onStateMachine){
+            //printf("here\n");
+            int bytes = read(fd, buf2, 1);
+            buf2[bytes] = '\0'; // Set end of string to '\0', so we can printf
+            if(buf2[0]!=0){
+                printf("var = 0x%02X\n", buf2[0]);
+            }else{
+                continue;
+            }
+            switch(curState){
+                case Other_RCV:
+                    if(buf2[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                        onStateMachine = FALSE;
+                    }
+                    break;
+                case FLAG_RCV:
+                    if(buf2[0]==ADDRESS_SENDER){
+                        curState = A_RCV;
+                    }
+                    else if(buf2[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case A_RCV:
+                    if(buf2[0]==CONTROL_UA){
+                        curState = C_RCV;
+                    }
+                    else if(buf2[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case C_RCV:
+                    if(buf2[0]==BBC_CHECK_UA){
+                            curState = BBC_ok;
+   
+                        }
+                        else if(buf2[0]==FLAG){
+                            curState = FLAG_RCV;
+                        }
+                        else{
+                            curState = Other_RCV;
+                        }
+                        break;
+                case BBC_ok:
+                    if(buf2[0]==FLAG){
+                        printf("tudo certo\n\n");
+                        printf("UA OKAY!\n\n");
+                        curState = Other_RCV;
+                        onStateMachine = FALSE;
+                        STOP = TRUE;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                default:
+                    onStateMachine = FALSE;
+                    break;
+                }
         }
     }
+
     // Wait until all bytes have been written to the serial port
     sleep(1);
 
