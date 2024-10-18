@@ -20,7 +20,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     args.baudRate = baudRate;
     args.nRetransmissions = nTries;
     args.timeout = timeout;
-    int check = llopen(args);
-    
+    int checkLlopen = llopen(args);
+    if(checkLlopen!=1){
+        printf("error LLopen.\n");
+    }
     // TODO
 }

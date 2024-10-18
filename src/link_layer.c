@@ -41,16 +41,16 @@ int llopen(LinkLayer connectionParameters){
 
 
             // Create string to send
-            unsigned char buf[6] = {0};
+            unsigned char buf[5] = {0};
             buf[0] = FLAG;
             buf[1] = ADDRESS_SENDER;
             buf[2] = CONTROL_SET;
             buf[3] = ADDRESS_SENDER ^ CONTROL_SET;
             buf[4] = FLAG;
-            buf[5] = '\n';
+            //buf[5] = '\n';
 
-            unsigned char buf2[6] = {0}; // +1: Save space for the final '\0' char
-            int checkWrite = writeBytesSerialPort(buf,6);
+            unsigned char buf2[5] = {0}; // +1: Save space for the final '\0' char
+            int checkWrite = writeBytesSerialPort(buf,5);
             if (checkWrite==-1) return -1;
             
 
@@ -64,7 +64,7 @@ int llopen(LinkLayer connectionParameters){
                 printf("var = 0x%02X\n", buf2[0]);
                 //reseting alarm and rewriting
                 if(alarmEnabled==FALSE){
-                    checkWrite = writeBytesSerialPort(buf,6);
+                    checkWrite = writeBytesSerialPort(buf,5);
                     if (checkWrite==-1) return -1;
                     alarm(timeout);
                     alarmEnabled = TRUE;
@@ -132,7 +132,10 @@ int llopen(LinkLayer connectionParameters){
                         case BBC_ok:
                             if(buf2[0]==FLAG){
                                 printf("\nConnection established!\n");
-                                return 1;
+                                alarm(0);
+                                onStateMachine = FALSE;
+                                STOP = TRUE;
+                                //return 1;
                             }
                             break;
                     default:
@@ -140,12 +143,98 @@ int llopen(LinkLayer connectionParameters){
                     }
                     }
                 }
+                /*
+                    DISCONECTING PART
+                */
+                unsigned char buf3[5] = {0};
+                buf3[0] = FLAG;
+                buf3[1] = ADDRESS_SENDER;
+                buf3[2] = DISC;
+                buf3[3] = ADDRESS_SENDER ^ DISC;
+                buf3[4] = FLAG;
+                //buf3[5] = '\n';
+                checkWrite = writeBytesSerialPort(buf3,5);
+                printf("\nSending disconecting flag\n");
+                unsigned char buf4[5] = {0};
+                if (checkWrite==-1) return -1;
+                int onStateMachine = TRUE;
+                state curState = Other_RCV;
+               
+                while(onStateMachine){
+                    int checkRead = readByteSerialPort(buf4);
+                    printf("var = 0x%02X\n", buf4[0]);
+                    while(!checkRead){
+                        if(checkRead==-1) return -1; 
+                        checkRead = readByteSerialPort(buf);
+                    }
+                    switch (curState){
+                        case Other_RCV:
+                            if(buf4[0]==FLAG){
+                                curState = FLAG_RCV;
+                            }/*
+                            else{
+                                onStateMachine = FALSE;
+                                printf("error disconecting\n");
+                            }
+                            */
+                            break;
+                        case FLAG_RCV:
+                            if(buf4[0]==ADDRESS_SENDER){
+                                curState = A_RCV;
+                                a = buf4[0];
+                            }
+                            else if(buf4[0]==FLAG){
+                                curState = FLAG_RCV;
+                            }
+                            else{
+                                curState = Other_RCV;
+                            }
+                            break;
+                        case A_RCV:
+                            
+                            if(buf4[0]==DISC){
+    
+                                curState = C_RCV;
+                                c = buf4[0];
+                            }
+                            else if(buf4[0]==FLAG){
+                            
+                                curState = FLAG_RCV;
+                            }
+                            else{
+                               
+                                curState = Other_RCV;
+                            }
+                            break;
+                        case C_RCV:
+                            if(buf4[0] == (a^c)){
+                                curState = BBC_ok;
+                            }
+                            else if(buf4[0]==FLAG){
+                                curState = FLAG;
+                            }
+                            else{
+                                curState = Other_RCV;
+                            }
+                            break;
+                        case BBC_ok:
+                            if(buf4[0]==FLAG){
+                                if(llclose(0)==-1){
+                                    return -1;
+                                }
+                                return 1;
+                            }
+                            break;
+                    default:
+                        break;
+                    }
+                    }
                 break;
                 }
             case LlRx:
                 {
                 //connection starting message
-                unsigned char buf[6] = {0};
+                unsigned char buf[5] = {0};
                 //vars for the lopp
                 int STOP = TRUE;
                 //vars to check bcc
@@ -166,9 +255,11 @@ int llopen(LinkLayer connectionParameters){
                                 if(buf[0]==FLAG){
                                     curState = FLAG_RCV;
                                 }
+                                /*
                                 else{
                                     onStateMachine = FALSE;
                                 }
+                                */
                                 break;
                             case FLAG_RCV:
                                 if(buf[0]==ADDRESS_SENDER){
@@ -209,17 +300,113 @@ int llopen(LinkLayer connectionParameters){
                             case BBC_ok:
                                 if(buf[0]==FLAG){
                                     //STOP = TRUE;
-                                    unsigned char buf2[6] = {0};
+                                    unsigned char buf2[5] = {0};
                                     printf("\nSending UA! \n");
                                     buf2[0] = FLAG;
                                     buf2[1] = ADDRESS_SENDER;
                                     buf2[2] = CONTROL_UA;
                                     buf2[3] = buf2[1]^buf2[2];
                                     buf2[4] = FLAG;
-                                    buf2[5] = '\n';
+                                    //buf2[5] = '\n';
 
-                                    int checkWrite = writeBytesSerialPort(buf2, 6);
+                                    int checkWrite = writeBytesSerialPort(buf2, 5);
+                                    if(checkWrite==-1) return -1;
+                                    STOP = FALSE;
+                                    onStateMachine = FALSE;
+
+                                }
+                                else{
+                                    curState = Other_RCV;
+                                }
+                                break;
+                            default:
+                                onStateMachine = FALSE;
+                                break;
+                        }
+                    }
+                }
+                /*
+                    DISCONECTING PART
+                */
+               printf("hre\n");
+                unsigned char buf3[5] = {0};
+                STOP = TRUE;
+                
+                while(STOP){
+                    //vars for state machine
+                    int onStateMachine = TRUE;
+                    state curState = Other_RCV;
+                    while(onStateMachine){
+                        int checkRead = readByteSerialPort(buf3);
+                        while(!checkRead){
+                            if(checkRead==-1) return -1; 
+                            checkRead = readByteSerialPort(buf3);
+                        }
+                        printf("var = 0x%02X\n", buf3[0]);
+                        switch(curState){
+                            case Other_RCV:
+                                if(buf3[0]==FLAG){
+                                    curState = FLAG_RCV;
+                                }
+                                /*
+                                else{
+                                    onStateMachine = FALSE;
+                                }
+                                */
+                                break;
+                            case FLAG_RCV:
+                                if(buf3[0]==ADDRESS_SENDER){
+                                    curState = A_RCV;
+                                    a = ADDRESS_SENDER;
+                                }
+                                else if(buf3[0]==FLAG){
+                                    curState = FLAG_RCV;
+                                }
+                                else{
+                                    curState = Other_RCV;
+                                }
+                                break;
+                            case A_RCV:
+                                if(buf3[0]==DISC){
+                                    curState = C_RCV;
+                                    c = DISC;
+                                }
+                                else if(buf3[0]==FLAG){
+                                    curState = FLAG_RCV;
+                                }
+                                else{
+                                    curState = Other_RCV;
+                                }
+                                break;
+                            case C_RCV:
+                                if(buf3[0]==(a^c)){
+                                        curState = BBC_ok;
+            
+                                    }
+                                    else if(buf3[0]==FLAG){
+                                        curState = FLAG_RCV;
+                                    }
+                                    else{
+                                        curState = Other_RCV;
+                                    }
+                                    break;
+                            case BBC_ok:
+                                if(buf3[0]==FLAG){
+                                    //STOP = TRUE;
+                                    unsigned char buf4[5] = {0};
+                                    printf("Sending Disconecting flag!\n");
+                                    buf4[0] = FLAG;
+                                    buf4[1] = ADDRESS_SENDER;
+                                    buf4[2] = DISC;
+                                    buf4[3] = buf4[1]^buf4[2];
+                                    buf4[4] = FLAG;
+                                    //buf4[5] = '\n';
+
+                                    int checkWrite = writeBytesSerialPort(buf4, 5);
                                     if (checkWrite==-1) return -1;
+                                    if(llclose(0)==-1){
+                                        return -1;
+                                    }
                                     return 1;
 
                                 }
@@ -317,203 +504,10 @@ app layer{
 ////////////////////////////////////////////////
 int llclose(int showStatistics)
 {
-    /*
-    switch(connectionParameters.role){
-        case LlTx: {
-
-
-            // Create string to send
-            unsigned char buf[6] = {0};
-            buf[0] = FLAG;
-            buf[1] = ADDRESS_SENDER;
-            buf[2] = CONTROL_SET;
-            buf[3] = ADDRESS_SENDER ^ CONTROL_SET;
-            buf[4] = FLAG;
-            buf[5] = '\n';
-
-            unsigned char buf2[6] = {0}; // +1: Save space for the final '\0' char
-            int checkWrite = writeBytesSerialPort(buf,6);
-            if (checkWrite==-1) return -1;
-            
-
-            //vars for alarm and alarm instalation
-            alarm(timeout);
-            alarmEnabled = TRUE;
-            int STOP = FALSE;
-            char a;
-            char c;
-            while(STOP==FALSE && alarmCount < nTrys){
-
-                //reseting alarm and rewriting
-                if(alarmEnabled==FALSE){
-                    checkWrite = writeBytesSerialPort(buf,6);
-                    if (checkWrite==-1) return -1;
-                    alarm(timeout);
-                    alarmEnabled = TRUE;
-                }
-
-                //vars for the loop and state machine
-                state curState = Other_RCV;
-                int onStateMachine = TRUE;
-                while(onStateMachine){
-                    int checkRead = readByteSerialPort(buf2);
-
-                    while(!checkRead){
-                        if(checkRead==-1) return -1; 
-                        checkRead = readByteSerialPort(buf2);
-                    }
-                   
-                   switch (curState){
-                    case Other_RCV:
-                            if(buf2[0]==FLAG){
-                                curState = FLAG_RCV;
-                            }
-                            else{
-                                onStateMachine = FALSE;
-                            }
-                            break;
-                        case FLAG_RCV:
-                            if(buf2[0]==ADDRESS_SENDER){
-                                curState = A_RCV;
-                                a = buf2[0];
-                            }
-                            else if(buf2[0]==FLAG){
-                                curState = FLAG_RCV;
-                            }
-                            else{
-                                curState = Other_RCV;
-                            }
-                        case A_RCV:
-                            if(buf2[0]==CONTROL_UA){
-                                curState = C_RCV;
-                                c = buf2[0];
-                            }
-                            else if(buf2[0]==FLAG){
-                                curState = FLAG_RCV;
-                            }
-                            else{
-                                curState = Other_RCV;
-                            }
-                        case C_RCV:
-                            if(buf2[0] == (a^c)){
-                                curState = BBC_ok;
-                            }
-                            else if(buf2[0]==FLAG){
-                                curState = FLAG;
-                            }
-                            else{
-                                curState = Other_RCV;
-                            }
-                        case BBC_ok:
-                            if(buf2[0]==FLAG){
-                                printf("Connection established!\n");
-                                return 1;
-                            }
-                    default:
-                        break;
-                    }
-                    }
-                }
-                break;
-                }
-            case LlRx:
-                {
-                printf("here\n");
-                //connection starting message
-                unsigned char buf[6] = {0};
-                //vars for the lopp
-                int STOP = TRUE;
-                //vars to check bcc
-                char a;
-                char c;
-                while(STOP){
-                    //vars for state machine
-                    int onStateMachine = TRUE;
-                    state curState = Other_RCV;
-                    while(onStateMachine){
-                        int checkRead = readByteSerialPort(buf);
-                        while(!checkRead){
-                            if(checkRead==-1) return -1; 
-                            checkRead = readByteSerialPort(buf);
-                        }
-                        switch(curState){
-                            case Other_RCV:
-                                if(buf[0]==FLAG){
-                                    curState = FLAG_RCV;
-                                }
-                                else{
-                                    onStateMachine = FALSE;
-                                }
-                                break;
-                            case FLAG_RCV:
-                                if(buf[0]==ADDRESS_SENDER){
-                                    curState = A_RCV;
-                                    a = ADDRESS_SENDER;
-                                }
-                                else if(buf[0]==FLAG){
-                                    curState = FLAG_RCV;
-                                }
-                                else{
-                                    curState = Other_RCV;
-                                }
-                                break;
-                            case A_RCV:
-                                if(buf[0]==CONTROL_SET){
-                                    curState = C_RCV;
-                                    c = CONTROL_SET;
-                                }
-                                else if(buf[0]==FLAG){
-                                    curState = FLAG_RCV;
-                                }
-                                else{
-                                    curState = Other_RCV;
-                                }
-                                break;
-                            case C_RCV:
-                                if(buf[0]==(a^c)){
-                                        curState = BBC_ok;
-            
-                                    }
-                                    else if(buf[0]==FLAG){
-                                        curState = FLAG_RCV;
-                                    }
-                                    else{
-                                        curState = Other_RCV;
-                                    }
-                                    break;
-                            case BBC_ok:
-                                if(buf[0]==FLAG){
-                                    //STOP = TRUE;
-                                    unsigned char buf2[6] = {0};
-                                    buf2[0] = FLAG;
-                                    buf2[1] = ADDRESS_SENDER;
-                                    buf2[2] = CONTROL_UA;
-                                    buf2[3] = buf2[1]^buf2[2];
-                                    buf2[4] = FLAG;
-                                    buf2[5] = '\n';
-
-                                    int checkWrite = writeBytesSerialPort(buf2, 6);
-                                    if (checkWrite==-1) return -1;
-                                    return 1;
-
-                                }
-                                else{
-                                    curState = Other_RCV;
-                                }
-                                break;
-                            default:
-                                onStateMachine = FALSE;
-                                break;
-                        }
-                    }
-                }
-            break;
-            }
-        default:
-            return -1;
-
-    }
-*/
+    printf("\ndisconecting...\n");
     int clstat = closeSerialPort();
+    if(clstat==-1){
+        printf("error on llclose\n");
+    }
     return clstat;
 }
