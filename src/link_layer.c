@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 #include "link_layer.h"
 #include "serial_port.h"
 #include "../include/consts.h"
@@ -17,6 +18,7 @@
 
 int alarmEnabled = FALSE;
 int alarmCount = 0;
+int curInfFram = 0;
 
 
 void alarmHandler(int signal){
@@ -25,7 +27,131 @@ void alarmHandler(int signal){
         printf("Alarm #%d\n", alarmCount);
 }
 
+/*pacotes de controlo e pacotes de dados
+    controlo -> TLV
+    start (1) 
+    T1 -> file size -> 0
+    T2 -> file name -> 1
+    end (3)
+    T->"codigo"
+    L->tamanho do que se vai escrber
+    V-> nome ficheiro//tamanho ficheiro
 
+    */
+
+int sendControlPacket(const char *filename){
+    FILE *fileCheck = fopen(filename, "rb"); 
+    if(fileCheck==NULL){
+        printf("error opening file\n");
+        return -1;
+    }
+
+    fseek(fileCheck, 0, SEEK_END);
+    long filesize = ftell(fileCheck);
+
+    size_t length = strlen(filename);
+    unsigned char *buf = (unsigned char *)malloc(14 + length);
+    //unsigned char buf[14+length] = {0};
+    memset(buf, 0, 14+length );
+    //start
+    buf[0] = 1; 
+    //T1 -> filesize
+    buf[1] = 0;
+    buf[2] = 8;
+    buf[3] = filesize;
+    //T2 -> filename
+    buf[11] = 1;
+    buf[12] = length;
+    buf[13] = *filename;
+    buf[13+length] = 3; 
+    int writeCheck = writeBytesSerialPort(buf,(14+length));
+    if(writeCheck==-1) return -1;
+    /*
+    tamanho buffer vai ser 
+    1 byte -> start | 1
+    1 byte -> T1    | 1
+    1 byte -> espaço para filesize  |8
+    8 bytes -> filesize | ....
+    1 byte -> T2   | 
+    1 byte -> espaço para filename  | 4 ou 8 ->sizeof(size_t)
+    8 bytes -> filename | ....
+    1 byte -> end | 3
+    */
+    free(buf);
+    fclose(fileCheck);
+    printf("\nControl packet sent!\n");
+    return 1;
+}
+
+
+
+int getControlPacket(char *filename, long *filesize){
+    int STOP = TRUE;
+    state curState = Start;
+    //curReading -> -1 erro, 0 filesize, 1 filename
+    int curReading = -1;
+    unsigned char buf[MAX_PAYLOAD_SIZE*2] = {0};
+    while(STOP){
+        int checkRead = readByteSerialPort(buf);
+        if(checkRead == -1){
+            return -1;
+
+        }else if(checkRead == 0){
+            continue;
+        }
+        switch(curState){
+            case Start:
+                if(buf[0]==1){
+                    curState = T;
+                }
+                else{
+                    return -1;
+                }
+                break;
+            case T:
+                if(buf[0]==0){
+                    curReading = 0;
+                }else if(buf[0]==1){
+                    curReading = 1;
+                }
+                else if(buf[0]==3){
+                    STOP = FALSE;
+                }else{
+                    return -1;
+                }
+                curState = L;
+                break;
+            case L:{
+                int index = buf[0];
+                int i = 0;
+                while(i<index){
+                    int checkRead = readByteSerialPort(buf);
+                    if(checkRead == -1){
+                        return -1;
+
+                    }else if(checkRead == 0){
+                        continue;
+                    }
+                    if(curReading==0){
+                        filesize = buf[0];
+                    }
+                    else if(curReading==1){
+                        filename = buf[0];
+                    }
+                    i++;
+                }
+                curState = T;
+                }
+                break;
+            default:
+                return -1;
+
+        }
+    }
+   
+    printf("\nControl packet received!\n");
+    return 0;
+}
 ////////////////////////////////////////////////
 // LLOPEN
 ////////////////////////////////////////////////
@@ -39,7 +165,7 @@ int llopen(LinkLayer connectionParameters){
     switch(connectionParameters.role){
         case LlTx: {
 
-
+            signal(SIGALRM, alarmHandler);
             // Create string to send
             unsigned char buf[5] = {0};
             buf[0] = FLAG;
@@ -60,10 +186,11 @@ int llopen(LinkLayer connectionParameters){
             int STOP = FALSE;
             char a;
             char c;
+            state curState = Other_RCV;
             while(STOP==FALSE && alarmCount < nTrys){
-                printf("var = 0x%02X\n", buf2[0]);
                 //reseting alarm and rewriting
                 if(alarmEnabled==FALSE){
+                    printf("Trying again...\n");
                     checkWrite = writeBytesSerialPort(buf,5);
                     if (checkWrite==-1) return -1;
                     alarm(timeout);
@@ -71,16 +198,17 @@ int llopen(LinkLayer connectionParameters){
                 }
 
                 //vars for the loop and state machine
-                state curState = Other_RCV;
                 int onStateMachine = TRUE;
                 while(onStateMachine){
                     int checkRead = readByteSerialPort(buf2);
-                    printf("var = 0x%02X\n", buf2[0]);
-                    while(!checkRead){
-                        if(checkRead==-1) return -1; 
-                        printf("%d \n",checkRead);
-                        checkRead = readByteSerialPort(buf2);
+                    if(checkRead==-1){
+                        return -1;
+                    }else if(checkRead==0){
+
+                        onStateMachine = FALSE;
+                        continue;
                     }
+                    
                     switch (curState){
                         case Other_RCV:
                             if(buf2[0]==FLAG){
@@ -131,7 +259,6 @@ int llopen(LinkLayer connectionParameters){
                             break;
                         case BBC_ok:
                             if(buf2[0]==FLAG){
-                                printf("\nConnection established!\n");
                                 alarm(0);
                                 onStateMachine = FALSE;
                                 STOP = TRUE;
@@ -141,11 +268,13 @@ int llopen(LinkLayer connectionParameters){
                     default:
                         break;
                     }
-                    }
                 }
+            }
+            if(alarmCount==nTrys) return -1;
                 /*
                     DISCONECTING PART
                 */
+                /*
                 unsigned char buf3[5] = {0};
                 buf3[0] = FLAG;
                 buf3[1] = ADDRESS_SENDER;
@@ -171,12 +300,12 @@ int llopen(LinkLayer connectionParameters){
                         case Other_RCV:
                             if(buf4[0]==FLAG){
                                 curState = FLAG_RCV;
-                            }/*
-                            else{
-                                onStateMachine = FALSE;
-                                printf("error disconecting\n");
                             }
-                            */
+                            //else{
+                            //    onStateMachine = FALSE;
+                            //    printf("error disconecting\n");
+                            //}
+                            
                             break;
                         case FLAG_RCV:
                             if(buf4[0]==ADDRESS_SENDER){
@@ -229,6 +358,7 @@ int llopen(LinkLayer connectionParameters){
                         break;
                     }
                     }
+                    */
                 break;
                 }
             case LlRx:
@@ -328,7 +458,7 @@ int llopen(LinkLayer connectionParameters){
                 /*
                     DISCONECTING PART
                 */
-               printf("hre\n");
+                /*
                 unsigned char buf3[5] = {0};
                 STOP = TRUE;
                 
@@ -348,11 +478,11 @@ int llopen(LinkLayer connectionParameters){
                                 if(buf3[0]==FLAG){
                                     curState = FLAG_RCV;
                                 }
-                                /*
-                                else{
-                                    onStateMachine = FALSE;
-                                }
-                                */
+                                
+                                //else{
+                                //    onStateMachine = FALSE;
+                                //}
+                                
                                 break;
                             case FLAG_RCV:
                                 if(buf3[0]==ADDRESS_SENDER){
@@ -420,6 +550,7 @@ int llopen(LinkLayer connectionParameters){
                         }
                     }
                 }
+                */
             break;
             }
         default:
@@ -437,6 +568,48 @@ int llopen(LinkLayer connectionParameters){
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
+    unsigned char bufSend[MAX_PAYLOAD_SIZE*2 + 6] = {0}; //creating the buf to send
+
+    bufSend[0] = FLAG;
+    bufSend[1] = ADDRESS_SENDER;
+    //I0 or I1
+    if(curInfFram==0){
+        bufSend[2] = I0;
+    }
+    else{
+        bufSend[2] = I1;
+    }
+    
+    bufSend[3] = bufSend[1]^bufSend[2]; //bcc1
+
+    int index = 0;
+    int offest = 0;
+    unsigned char bufAux[BUF_SIZE] = {0};
+    int bcc2 = 0;
+    while (index < bufSize) {
+        //reading 1 byte and checking for errors
+        int checkRead = readByteSerialPort(bufAux);
+        while(!checkRead){
+            checkRead = readByteSerialPort(bufAux);
+        }
+        if(bufAux[0]==FLAG){
+            bufSend[4+index+offest] = ESC;
+            bufSend[4+index+offest+1] = 0x5E;
+            offest++;
+        }
+        else if(bufAux[0]==ESC){
+            bufSend[4+index+offest] = ESC;
+            bufSend[4+index+offest+1] = 0x5D;
+            offest++;
+        }
+        else{
+            bufSend[4+index+offest] = bufAux[0];
+        }
+        bcc2 = bcc2^bufAux[0];
+        index++;
+    }
+    bufSend[4+index+offest] = bcc2;
+    bufSend[4+index+offest+1] = FLAG;
     // TODO
 
     return 0;
@@ -446,7 +619,8 @@ int llwrite(const unsigned char *buf, int bufSize)
 // LLREAD
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
-{
+{   
+
     // TODO
 
     return 0;
@@ -479,7 +653,7 @@ app layer{
 }
         
     TX - F A C BCC1 [DADOS] BCC2 F
-    Rx - F A C BCC1
+    Rx - F A C BCC1 F
 
     I0   ->
     RR1  <-

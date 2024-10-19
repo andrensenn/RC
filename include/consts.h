@@ -4,11 +4,17 @@
 #include <termios.h>
 
 typedef enum{
+    //header state machine states
     Other_RCV,
     FLAG_RCV,
     A_RCV,
     C_RCV,
-    BBC_ok
+    BBC_ok,
+    //controll packet stats
+    Start,
+    T,
+    L,
+    V
 }state;
 
 #define FALSE 0
@@ -16,6 +22,7 @@ typedef enum{
 
 #define BUF_SIZE 256
 #define FLAG 0x7E
+#define ESC 0x7D
 
 #define ADDRESS_RECEIVER 0x03
 #define ADDRESS_SENDER 0x01
