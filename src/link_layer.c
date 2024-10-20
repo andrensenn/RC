@@ -51,6 +51,7 @@ int sendControlPacket(const char *filename){
 
     size_t length = strlen(filename);
     unsigned char *buf = (unsigned char *)malloc(14 + length);
+    unsigned char auxbuf[8];
     //unsigned char buf[14+length] = {0};
     memset(buf, 0, 14+length );
     //start
@@ -58,11 +59,22 @@ int sendControlPacket(const char *filename){
     //T1 -> filesize
     buf[1] = 0;
     buf[2] = 8;
-    buf[3] = filesize;
+
+    sprintf((char *)auxbuf, "%ld", filesize); //this aparently converts a long into a string into a buf (thanks stack overflow)
+    int j = 0;
+    while(j<8){
+        buf[3+j] = auxbuf[j];
+        j++;
+    }
     //T2 -> filename
     buf[11] = 1;
     buf[12] = length;
     buf[13] = *filename;
+    int i =0;
+    while(i<length){
+        buf[13+i] = filename[i];
+        i++;
+    }
     buf[13+length] = 3; 
     int writeCheck = writeBytesSerialPort(buf,(14+length));
     if(writeCheck==-1) return -1;
@@ -85,7 +97,7 @@ int sendControlPacket(const char *filename){
 
 
 
-int getControlPacket(char *filename, long *filesize){
+int getControlPacket(char *filename, char *filesize){
     int STOP = TRUE;
     state curState = Start;
     //curReading -> -1 erro, 0 filesize, 1 filename
@@ -133,13 +145,19 @@ int getControlPacket(char *filename, long *filesize){
                         continue;
                     }
                     if(curReading==0){
-                        filesize = buf[0];
+                        filesize[i] = buf[0];
                     }
                     else if(curReading==1){
-                        filename = buf[0];
+                        filename[i] = buf[0];
                     }
                     i++;
                 }
+                if(curReading==0){
+                        filesize = "\n";
+                    }
+                    else if(curReading==1){
+                        filename = "\n";
+                    }
                 curState = T;
                 }
                 break;
@@ -262,6 +280,7 @@ int llopen(LinkLayer connectionParameters){
                                 alarm(0);
                                 onStateMachine = FALSE;
                                 STOP = TRUE;
+                                printf("\nUA received!\n");
                                 //return 1;
                             }
                             break;

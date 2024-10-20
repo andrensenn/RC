@@ -41,16 +41,18 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             break;
         case LlRx:
             {
-            unsigned char *filesize[MAX_PAYLOAD_SIZE];
-            unsigned char *filename[MAX_PAYLOAD_SIZE];
-            int i = getControlPacket(filename, filesize);
+            unsigned char filenameReceived[MAX_PAYLOAD_SIZE] = {0};
+            unsigned char size[MAX_PAYLOAD_SIZE] = {0};
+            
+            int i = getControlPacket(filenameReceived, size);
             if (i==-1) 
             {
                 return;
             }
+            printf("\n%s\n", filenameReceived);
+            printf("%s\n", size);
             }
             break;
 
     }
-    // TODO
 }
