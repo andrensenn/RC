@@ -611,12 +611,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     int bcc2 = 0;
     while (index < bufSize) {
         //reading 1 byte and checking for errors
-        /*
-        int checkRead = readByteSerialPort(bufAux);
-        while(!checkRead){
-            checkRead = readByteSerialPort(bufAux);
-        }
-        */
+        
         bcc2 = bcc2^buf[index];
         if(buf[index]==FLAG){
             bufSend[4+index+offest] = ESC;
@@ -703,10 +698,9 @@ int llread(unsigned char *packet)
                     }
                     break;
                 case Reading_Data:
-                    bcc2 = buf[0];
-                    //bcc2Check = bcc2Check^buf[0];
-                    //infinite while cause we will return after we read everything
+                    {
                     int i = 0;
+                    //infinite while cause we will return after we read everything
                     while(1){
                         if(readByteSerialPort(buf)>0){
                             if(buf[0]==FLAG){
@@ -720,7 +714,6 @@ int llread(unsigned char *packet)
                                 }
                             }
                             //destuffing
-                            
                             else if(buf[0]==ESC){
                                 if(readByteSerialPort(buf)>0){
                                     char toPut;
@@ -734,7 +727,6 @@ int llread(unsigned char *packet)
                                     packet[i] = bcc2;
                                     bcc2Check = bcc2Check^bcc2;
                                     bcc2 = toPut;
-
                                     i++;
                                 }
                                 else if(readByteSerialPort(buf)==-1){
@@ -746,7 +738,6 @@ int llread(unsigned char *packet)
                                 packet[i] = bcc2;
                                 bcc2Check = bcc2Check^bcc2;
                                 bcc2 = buf[0];
-
                                 i++;//aumentar indice no packet
                             }
                         }
@@ -756,9 +747,11 @@ int llread(unsigned char *packet)
 
                     }
                     STOP = FALSE;
+                    }
                     break;
                 default:
                     return -1;
+                
             }
 
         }
@@ -766,8 +759,6 @@ int llread(unsigned char *packet)
             return -1;
         }
     }
-
-    // TODO
 
     return 0;
 }

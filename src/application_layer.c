@@ -38,8 +38,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             long i = sendControlPacket(filename); 
             if (i==-1) return;
             sizeOfFile = i;
+            //just to test
             unsigned char test[15] = {0,1,2,4,1,6,8,2,2,1,ESC,FLAG,5,1,1};
             int checkllwrite = llwrite(test,15);
+            //test end
 
             }
             break;
@@ -53,17 +55,19 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             {
                 return;
             }
+            unsigned char read[MAX_PAYLOAD_SIZE] = {0};
+            int checkRead = llread(read);
+            //just to test
             sizeOfFile = atol(size);
             printf("\n%s\n", filenameReceived);
             printf("%ld\n", sizeOfFile);
-            unsigned char read[MAX_PAYLOAD_SIZE] = {0};
-            int checkRead = llread(read);
             
             int i = 0;
             while(i<checkRead){
                 printf("var = 0x%02X\n", read[i]);
                 i++;
             }
+            //end test
             
             }
             break;
