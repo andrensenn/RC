@@ -19,7 +19,6 @@
 int alarmEnabled = FALSE;
 int alarmCount = 0;
 int curInfFram = 0;
-int firstIt = TRUE;
 
 
 void alarmHandler(int signal){
@@ -93,6 +92,75 @@ long sendControlPacket(const char *filename){
     free(buf);
     fclose(fileCheck);
     printf("\nControl packet sent!\n");
+    unsigned char ansBuf[MAX_PAYLOAD_SIZE] = {0};
+    int STOP = TRUE;
+    state curState = Other_RCV;
+    int a;
+    int c;
+    while(STOP){
+        if(readByteSerialPort(ansBuf)>0){
+            switch(curState){
+                case Other_RCV:
+                    if(ansBuf[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        return -1;
+                    }
+                    break;
+                case FLAG_RCV:
+                    if(ansBuf[0] == ADDRESS_SENDER){
+                        curState = A_RCV;
+                        a = ADDRESS_SENDER;
+                    }
+                    else if(ansBuf[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case A_RCV:
+                    if(ansBuf[0] == RR0){
+                        curState = C_RCV;
+                        c = RR0;
+                    }
+                    else if(ansBuf[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case C_RCV:
+                    if(ansBuf[0] == (a^c)){
+                        curState = BBC_ok;
+                    }
+                    else if(ansBuf[0]==FLAG){
+                        curState = FLAG_RCV;
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                case BBC_ok:
+                    if(ansBuf[0]==FLAG){
+                        STOP = FALSE;
+                        printf("\nControl packet confirmation ok!\n");
+                    }
+                    else{
+                        curState = Other_RCV;
+                    }
+                    break;
+                default:
+                    return -1;
+            }
+        }
+        else if(readByteSerialPort(ansBuf)==-1){
+            return -1;
+        }
+    }
+
     return filesize;
 }
 
@@ -169,6 +237,8 @@ int getControlPacket(char *filename, char *filesize){
     }
    
     printf("\nControl packet received!\n");
+    unsigned char packAns[5] = {FLAG, ADDRESS_SENDER, RR0, (ADDRESS_SENDER^RR0), FLAG};
+    if(writeBytesSerialPort(packAns,5)==-1)return -1; 
     return 0;
 }
 ////////////////////////////////////////////////
@@ -611,7 +681,6 @@ int llwrite(const unsigned char *buf, int bufSize)
     int bcc2 = 0;
     while (index < bufSize) {
         //reading 1 byte and checking for errors
-        
         bcc2 = bcc2^buf[index];
         if(buf[index]==FLAG){
             bufSend[4+index+offest] = ESC;
@@ -700,9 +769,11 @@ int llread(unsigned char *packet)
                 case Reading_Data:
                     {
                     int i = 0;
+                    bcc2 = buf[0];
                     //infinite while cause we will return after we read everything
                     while(1){
                         if(readByteSerialPort(buf)>0){
+                            
                             if(buf[0]==FLAG){
                                 if(bcc2==bcc2Check){
                                     printf("\nPacket with no errors!\n");
@@ -723,7 +794,6 @@ int llread(unsigned char *packet)
                                     else if(buf[0]==0x5D){
                                         toPut = 0x7D;
                                     }
-                                    printf("escrevi\n");
                                     packet[i] = bcc2;
                                     bcc2Check = bcc2Check^bcc2;
                                     bcc2 = toPut;
