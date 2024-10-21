@@ -5,11 +5,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "../include/consts.h"
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
     {
-
+    long sizeOfFile;
     LinkLayer args;
     strcpy(args.serialPort, serialPort);
     LinkLayerRole roleThis;
@@ -34,23 +35,36 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     
     switch(roleThis){
         case LlTx:{
-            int i = sendControlPacket(filename); 
+            long i = sendControlPacket(filename); 
             if (i==-1) return;
-            }
+            sizeOfFile = i;
+            unsigned char test[15] = {0,1,2,4,1,6,8,2,2,1,ESC,FLAG,5,1,1};
+            int checkllwrite = llwrite(test,15);
 
+            }
             break;
         case LlRx:
             {
             unsigned char filenameReceived[MAX_PAYLOAD_SIZE] = {0};
             unsigned char size[MAX_PAYLOAD_SIZE] = {0};
             
-            int i = getControlPacket(filenameReceived, size);
-            if (i==-1) 
+            int checkControlPacket = getControlPacket(filenameReceived, size);
+            if (checkControlPacket==-1) 
             {
                 return;
             }
+            sizeOfFile = atol(size);
             printf("\n%s\n", filenameReceived);
-            printf("%s\n", size);
+            printf("%ld\n", sizeOfFile);
+            unsigned char read[MAX_PAYLOAD_SIZE] = {0};
+            int checkRead = llread(read);
+            
+            int i = 0;
+            while(i<checkRead){
+                printf("var = 0x%02X\n", read[i]);
+                i++;
+            }
+            
             }
             break;
 

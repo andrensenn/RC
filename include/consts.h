@@ -14,7 +14,9 @@ typedef enum{
     Start,
     T,
     L,
-    V
+    V,
+    //llread readingDataState
+    Reading_Data
 }state;
 
 #define FALSE 0
