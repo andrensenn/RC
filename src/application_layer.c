@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include "../include/consts.h"
 
+
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
     {
@@ -81,9 +82,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     }
                 }
                 int checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);//if -1 written, send again
-                while(checkllwrite==-1){
+                int trys = 1;
+                while(checkllwrite==-1 & trys < nTries){
                     printf("rewritting packet!\n");
                     checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
+                    trys++;
                 }
                 offset = offset + MAX_PAYLOAD_SIZE;
                 }
@@ -101,7 +104,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 return;
             }
             int STOP = TRUE;
-            FILE *newFile = fopen("penguin-received.gif", "wb");//needs to be changed! brute force rn|
+            FILE *newFile = fopen(filename, "wb");
             sizeOfFile = atol(size);
             if(newFile==NULL){
                 printf("error opening file\n");

@@ -276,7 +276,7 @@ int llopen(LinkLayer connectionParameters){
             while(STOP==FALSE && alarmCount < nTrys){
                 //vars for the loop and state machine
                 int onStateMachine = TRUE;
-                
+                curState = Other_RCV;
                 while(onStateMachine){
                     //reseting alarm and rewriting
                     if(alarmEnabled==FALSE){
@@ -286,7 +286,6 @@ int llopen(LinkLayer connectionParameters){
                         alarm(timeout);
                         alarmEnabled = TRUE;
                         onStateMachine = FALSE;
-                        curState = Other_RCV;
                     }
                     if(readByteSerialPort(buf2)>0){
                         printf("var = 0x%02X\n", buf2[0]);
@@ -351,7 +350,7 @@ int llopen(LinkLayer connectionParameters){
                         default:
                             break;
                         }
-                    }
+                }
                     else if(readByteSerialPort(buf2)==-1){
                         return -1;
                     }
