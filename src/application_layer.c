@@ -88,6 +88,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
                     trys++;
                 }
+                if(trys==nTries){
+                    printf("error!\n");
+                    return;
+                }
                 offset = offset + MAX_PAYLOAD_SIZE;
                 }
             fclose(fileCheck);
