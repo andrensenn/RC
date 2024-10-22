@@ -40,8 +40,7 @@ typedef enum{
 #define I1 0x80 //information frame 1
 
 
-#define BBC_CHECK_SET (ADDRESS_SENDER^CONTROL_SET)
-#define BBC_CHECK_UA (ADDRESS_SENDER^CONTROL_UA)
+
 
 
 

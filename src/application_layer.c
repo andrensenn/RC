@@ -10,7 +10,7 @@
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
     {
-    long sizeOfFile;
+    unsigned long sizeOfFile;
     LinkLayer args;
     strcpy(args.serialPort, serialPort);
     LinkLayerRole roleThis;
@@ -80,8 +80,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                         index++;
                     }
                 }
-                int checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
-                if(checkllwrite==-1) return -1;
+                int checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);//if -1 written, send again
+                while(checkllwrite==-1){
+                    printf("rewritting packet!\n");
+                    checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
+                }
                 offset = offset + MAX_PAYLOAD_SIZE;
                 }
             fclose(fileCheck);
@@ -98,7 +101,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 return;
             }
             int STOP = TRUE;
-            FILE *newFile = fopen("penguin-received.gif", "wb");
+            FILE *newFile = fopen("penguin-received.gif", "wb");//needs to be changed! brute force rn|
             sizeOfFile = atol(size);
             if(newFile==NULL){
                 printf("error opening file\n");
@@ -108,8 +111,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             while(STOP){
                 unsigned char read[MAX_PAYLOAD_SIZE] = {0};
                 int checkRead = llread(read);
-                if(checkRead==-1) return -1;
-                printf("writting to file\n");
+                while(checkRead==-1){
+                    checkRead = llread(read);
+                }
                 size_t bytesWritten = fwrite(read, 1, checkRead, newFile);
                 if(bytesWritten!=checkRead) {
                     printf("error writting to the file\n");

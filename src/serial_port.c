@@ -86,7 +86,6 @@ int openSerialPort(const char *serialPort, int baudRate)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Block reading
     newtio.c_cc[VMIN] = 1;  // Byte by byte
-
     tcflush(fd, TCIOFLUSH);
 
     // Set new port settings
