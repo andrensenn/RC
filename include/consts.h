@@ -16,7 +16,9 @@ typedef enum{
     L,
     V,
     //llread readingDataState
-    Reading_Data
+    Reading_Data,
+    Check_BCC,
+    BCC_Wrong
 }state;
 
 #define FALSE 0

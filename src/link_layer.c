@@ -99,7 +99,8 @@ long sendControlPacket(const char *filename){
     int a;
     int c;
     while(STOP){
-        if(readByteSerialPort(ansBuf)>0){
+        int checkRead = readByteSerialPort(ansBuf);
+        if(checkRead>0){
             switch(curState){
                 case Other_RCV:
                     if(ansBuf[0]==FLAG){
@@ -157,7 +158,7 @@ long sendControlPacket(const char *filename){
                     return -1;
             }
         }
-        else if(readByteSerialPort(ansBuf)==-1){
+        else if(checkRead==-1){
             return -1;
         }
     }
@@ -174,7 +175,8 @@ int getControlPacket(char *filename, char *filesize){
     int curReading = -1;
     unsigned char buf[MAX_PAYLOAD_SIZE*2] = {0};
     while(STOP){
-        if(readByteSerialPort(buf)>0){
+        int checkRead =readByteSerialPort(buf);
+        if(checkRead>0){
             switch(curState){
                 case Start:
                     if(buf[0]==1){
@@ -201,7 +203,8 @@ int getControlPacket(char *filename, char *filesize){
                     int index = buf[0];
                     int i = 0;
                     while(i<index){
-                        if(readByteSerialPort(buf)>0){
+                        checkRead = readByteSerialPort(buf);
+                        if(checkRead>0){
                             if(curReading==0){
                             filesize[i] = buf[0];
                         }
@@ -210,7 +213,7 @@ int getControlPacket(char *filename, char *filesize){
                         }
                             i++;
                         }
-                        else if(readByteSerialPort(buf)==-1){
+                        else if(checkRead==-1){
                             return -1;
                         }
                         
@@ -228,7 +231,7 @@ int getControlPacket(char *filename, char *filesize){
                     return -1;
             }
         }
-        else if(readByteSerialPort(buf)==-1){
+        else if(checkRead==-1){
             return -1;
         }
     }
@@ -287,8 +290,8 @@ int llopen(LinkLayer connectionParameters){
                         alarmEnabled = TRUE;
                         onStateMachine = FALSE;
                     }
-                    if(readByteSerialPort(buf2)>0){
-                        printf("var = 0x%02X\n", buf2[0]);
+                    int checkRead = readByteSerialPort(buf2);
+                    if(checkRead>0){
                         switch (curState){
                             case Other_RCV:
                                 if(buf2[0]==FLAG){
@@ -350,10 +353,11 @@ int llopen(LinkLayer connectionParameters){
                         default:
                             break;
                         }
-                }
-                    else if(readByteSerialPort(buf2)==-1){
+                    }
+                    else if(checkRead==-1){
                         return -1;
                     }
+                
                 }
             }
             if(alarmCount==nTrys) return -1;
@@ -461,17 +465,13 @@ int llopen(LinkLayer connectionParameters){
                     int onStateMachine = TRUE;
                     state curState = Other_RCV;
                     while(onStateMachine){
-                        if(readByteSerialPort(buf)>0){
+                        int checkRead = readByteSerialPort(buf);
+                        if(checkRead>0){
                             switch(curState){
                                 case Other_RCV:
                                     if(buf[0]==FLAG){
                                         curState = FLAG_RCV;
                                     }
-                                    /*
-                                    else{
-                                        onStateMachine = FALSE;
-                                    }
-                                    */
                                     break;
                                 case FLAG_RCV:
                                     if(buf[0]==ADDRESS_SENDER){
@@ -498,7 +498,6 @@ int llopen(LinkLayer connectionParameters){
                                     }
                                     break;
                                 case C_RCV:
-                                    printf("here\n");
                                     if(buf[0]==(a^c)){
                                             curState = BBC_ok;
                 
@@ -537,7 +536,7 @@ int llopen(LinkLayer connectionParameters){
                                     break;
                             }
                         }
-                        else if(readByteSerialPort(buf)==-1){
+                        else if(checkRead==-1){
                             return -1;
                         }
                         
@@ -678,6 +677,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     //unsigned char bufAux[BUF_SIZE] = {0};
     int bcc2 = 0;
     while (index < bufSize) {
+
         //reading 1 byte and checking for errors
         bcc2 = bcc2^buf[index];
         if(buf[index]==FLAG){
@@ -703,13 +703,13 @@ int llwrite(const unsigned char *buf, int bufSize)
     if(checkWrite==-1) return -1;
     printf("\nPacket writen!\n");
     //wait for the answer from the reader
-
     state curState = Other_RCV;
     int a;
     int c;
     unsigned char answer[MAX_PAYLOAD_SIZE] = {0};
     while(TRUE){
-        if(readByteSerialPort(answer)>0){
+        int checkRead = readByteSerialPort(answer);
+        if(checkRead>0){
             switch (curState){
                 case Other_RCV:
                     if(answer[0]==FLAG){
@@ -747,21 +747,21 @@ int llwrite(const unsigned char *buf, int bufSize)
                     break;
                 case BBC_ok:
                     if(answer[0]==FLAG){
-                        if(curInfFram==0 & c==RR1){
+                        if(curInfFram==0 && c==RR1){
                             printf("packet was confirmed!\n");
                             curInfFram = 1;
                             return checkWrite;
                         }
-                        else if(curInfFram==1 & c==RR0){
+                        else if(curInfFram==1 && c==RR0){
                             printf("packet was confirmed!\n");
                             curInfFram = 0;
                             return checkWrite;
                         }
-                        else if(c==REJ0 & curInfFram==0){
+                        else if(c==REJ0 && curInfFram==0){
                             printf("rej!\n");
                             return -1;
                         }
-                        else if(c==REJ1 & curInfFram==1){
+                        else if(c==REJ1 && curInfFram==1){
                             printf("rej!\n");
                             return -1;
                         }
@@ -793,11 +793,13 @@ int llread(unsigned char *packet)
     state curState = Other_RCV;
     int a;
     int c;
-    char bcc2;
+    char bcc2 = 0;
     int bcc2Check = 0;
     int i = 0;
+    int index = 0;
     while(STOP){
-        if(readByteSerialPort(buf)>0){
+        int checkRead = readByteSerialPort(buf);
+        if(checkRead>0){
             switch(curState){
                 case Other_RCV:
                     if(buf[0]==FLAG){
@@ -844,54 +846,13 @@ int llread(unsigned char *packet)
                         curState = Other_RCV;
                     }
                     break;
-                case Reading_Data:{
-                    int i = 0;
-                    bcc2 = buf[0];
-                    //infinite while cause we will return after we read everything
-                    while(1){
-                        if(readByteSerialPort(buf)>0){
-                            if(buf[0]==FLAG){
-                                if(bcc2==bcc2Check){
-                                    printf("\nPacket with no errors!\n");
-                                    
-                                    if(curInfFramR==0){
-                                        unsigned char answer[5] = {FLAG, ADDRESS_SENDER, RR1, (ADDRESS_SENDER^RR1), FLAG};
-                                        curInfFramR = 1;
-                                        int checkWrite = writeBytesSerialPort(answer, 5);
-                                        if (checkWrite==-1) return -1;
-                                        
-                                    }
-                                    else if(curInfFramR==1){
-                                        unsigned char answer[5] = {FLAG, ADDRESS_SENDER, RR0, (ADDRESS_SENDER^RR0), FLAG};
-                                        curInfFramR = 0;
-                                        int checkWrite = writeBytesSerialPort(answer, 5);
-                                        if (checkWrite==-1) return -1;
-                                       
-                                    }
-                                    return i;
-                                }
-                                else{
-                                    printf("\nWrong BCC\n");
-                                    if(curInfFramR==0){
-                                        unsigned char answer[5] = {FLAG, ADDRESS_SENDER, REJ0, (ADDRESS_SENDER^REJ0), FLAG};
-                                        curInfFramR = 1;
-                                        int checkWrite = writeBytesSerialPort(answer, 5);
-                                        if (checkWrite==-1) return -1;
-                                        
-                                    }
-                                    else if(curInfFramR==1){
-                                        unsigned char answer[5] = {FLAG, ADDRESS_SENDER, REJ1, (ADDRESS_SENDER^REJ1), FLAG};
-                                        curInfFramR = 0;
-                                        int checkWrite = writeBytesSerialPort(answer, 5);
-                                        if (checkWrite==-1) return -1;
-                                       
-                                    }
-                                    return -1;
-                                }
-                            }
-                            //destuffing
-                            else if(buf[0]==ESC){
-                                if(readByteSerialPort(buf)>0){
+                case Reading_Data:
+                    {
+                        if(buf[0]==ESC){
+                            int STOP = TRUE;
+                            while(STOP){
+                                int checkByteDes = readByteSerialPort(buf);
+                                if(checkByteDes>0){
                                     char toPut;
                                     if(buf[0]==0x5E){
                                         toPut = 0x7E;
@@ -899,44 +860,121 @@ int llread(unsigned char *packet)
                                     else if(buf[0]==0x5D){
                                         toPut = 0x7D;
                                     }
-                                    packet[i] = bcc2;
-                                    bcc2Check = bcc2Check^bcc2;
-                                    bcc2 = toPut;
-                                    i++;
+                                    else{
+                                        return -1;
+                                    }
+                                    packet[index] = toPut;
+                                    bcc2Check = bcc2Check^toPut;
+                                    index++;
+                                    STOP = FALSE;
                                 }
-                                else if(readByteSerialPort(buf)==-1){
+                                else if(checkByteDes==-1){
                                     return -1;
                                 }
                             }
-                            
-                            else{
-                                packet[i] = bcc2;
-                                bcc2Check = bcc2Check^bcc2;
-                                bcc2 = buf[0];
-                                i++;//aumentar indice no packet
+                        }
+                        else{
+                            packet[index] = buf[0];
+                            bcc2Check = bcc2Check^buf[0];
+                            index++;//aumentar indice no packet
+                        }
+                        while(index<(MAX_PAYLOAD_SIZE)){
+                            int checkReadDate = readByteSerialPort(buf);
+                            if(checkReadDate>0){
+                                if(buf[0]==ESC){
+                                    int STOP = TRUE;
+                                    while(STOP){
+                                        int checkByteDes = readByteSerialPort(buf);
+                                        if(checkByteDes>0){
+                                            char toPut;
+                                            if(buf[0]==0x5E){
+                                                toPut = 0x7E;
+                                            }
+                                            else if(buf[0]==0x5D){
+                                                toPut = 0x7D;
+                                            }
+                                            else{
+                                                return -1;
+                                            }
+                                            packet[index] = toPut;
+                                            bcc2Check = bcc2Check^toPut;
+                                            index++;
+                                            STOP = FALSE;
+                                        }
+                                        else if(checkByteDes==-1){
+                                            return -1;
+                                        }
+                                    }
+                                }
+                                else{
+                                    packet[index] = buf[0];
+                                    bcc2Check = bcc2Check^buf[0];
+                                    index++;//aumentar indice no packet
+                                }
                             }
+                            else if(checkReadDate==-1) return -1; 
+                            
                         }
-                        else if(readByteSerialPort(buf)==-1){
-                            return -1;
-                        }
-
+               
+                        curState = Check_BCC;
+                        break;
                     }
-                    STOP = FALSE;
+                case Check_BCC:
+                    if(buf[0]==bcc2Check){
+                        curState = BBC_ok;
+                    }
+                    else{
+                        curState = BCC_Wrong;
                     }
                     break;
-                    
+                case BBC_ok:
+                    if(buf[0]==FLAG){
+                        if(curInfFramR==0){
+                            unsigned char answer[5] = {FLAG, ADDRESS_SENDER, RR1, (ADDRESS_SENDER^RR1), FLAG};
+                            curInfFramR = 1;
+                            int checkWrite = writeBytesSerialPort(answer, 5);
+                            if (checkWrite==-1) return -1;
+                            
+                        }
+                        else if(curInfFramR==1){
+                            unsigned char answer[5] = {FLAG, ADDRESS_SENDER, RR0, (ADDRESS_SENDER^RR0), FLAG};
+                            curInfFramR = 0;
+                            int checkWrite = writeBytesSerialPort(answer, 5);
+                            if (checkWrite==-1) return -1;
+                        
+                        }
+                        return index;
+                    }
+                    else{
+                        return -1;
+                    }
+                    break;
+                case BCC_Wrong:
+                    if(buf[0]==FLAG){
+                        printf("\nWrong BCC\n");
+                        if(curInfFramR==0){
+                            unsigned char answer[5] = {FLAG, ADDRESS_SENDER, REJ0, (ADDRESS_SENDER^REJ0), FLAG};
+                            int checkWrite = writeBytesSerialPort(answer, 5);
+                            if (checkWrite==-1) return -1;
+                            
+                        }
+                        else if(curInfFramR==1){
+                            unsigned char answer[5] = {FLAG, ADDRESS_SENDER, REJ1, (ADDRESS_SENDER^REJ1), FLAG};
+                            int checkWrite = writeBytesSerialPort(answer, 5);
+                            if (checkWrite==-1) return -1;
+                        
+                        }
+                        return -1;
+                    }
+                    break;
                 default:
                     return -1;
-                
-            }
-
+            } 
         }
-        else if(readByteSerialPort(buf)==-1){
+        else if(checkRead==-1){
             return -1;
         }
-        i++;
     }
-
     return 0;
 }
 

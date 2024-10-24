@@ -40,7 +40,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             long i = sendControlPacket(filename); 
             if (i==-1) return;
             sizeOfFile = i;
-
             /*
             open the file
             ready byte by byte to a buf
@@ -63,7 +62,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             //fseek(fileCheck, 0, SEEK_END);
             
             int STOP = TRUE;
-            int offset = 0 ;
             while(STOP){
                 int index = 0;
                 int nextChar;
@@ -82,8 +80,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     }
                 }
                 int checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);//if -1 written, send again
+                printf("%d\n", checkllwrite);
                 int trys = 1;
-                while(checkllwrite==-1 & trys < nTries){
+                while(checkllwrite==-1 && trys < nTries){
                     printf("rewritting packet!\n");
                     checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
                     trys++;
@@ -92,13 +91,14 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     printf("error!\n");
                     return;
                 }
-                offset = offset + MAX_PAYLOAD_SIZE;
-                }
+                
+            }
             fclose(fileCheck);
             }
             break;
         case LlRx:
             {
+            sleep(1);
             unsigned char filenameReceived[MAX_PAYLOAD_SIZE] = {0};
             unsigned char size[MAX_PAYLOAD_SIZE] = {0};
             
@@ -108,13 +108,14 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 return;
             }
             int STOP = TRUE;
-            FILE *newFile = fopen(filename, "wb");
+            FILE *newFile = fopen("penguin-received.gif", "wb");//CHANGE
             sizeOfFile = atol(size);
             if(newFile==NULL){
                 printf("error opening file\n");
                 return -1;
             }
-            int total = 0;
+            unsigned long total = 0;
+            int i = 0;
             while(STOP){
                 unsigned char read[MAX_PAYLOAD_SIZE] = {0};
                 int checkRead = llread(read);
@@ -122,13 +123,17 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     checkRead = llread(read);
                 }
                 size_t bytesWritten = fwrite(read, 1, checkRead, newFile);
+        
                 if(bytesWritten!=checkRead) {
                     printf("error writting to the file\n");
                     fclose(newFile);
                     return -1;
                 }
+               
                 total = total + checkRead;
-                if(total >= sizeOfFile) STOP = FALSE;
+                if(total >= sizeOfFile) {
+                    STOP = FALSE;
+                }
             }
             fclose(newFile);
             //just to test
