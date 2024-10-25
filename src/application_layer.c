@@ -53,26 +53,33 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             //int checkllwrite = llwrite(test,15);
             //test end
             
+            FILE *fileChecksize = fopen(filename, "r"); 
+            if(fileChecksize==NULL){
+                printf("error opening file\n");
+                return -1;
+            }
+            fseek(fileChecksize, 0, SEEK_END);
+            long filesize = ftell(fileChecksize);
+            int total = 0;
+            fclose(fileChecksize);
+
+
             FILE *fileCheck = fopen(filename, "r"); 
             if(fileCheck==NULL){
                 printf("error opening file\n");
                 return -1;
             }
-
-            //fseek(fileCheck, 0, SEEK_END);
-            
-            int STOP = TRUE;
-            while(STOP){
+            while(total<filesize){
                 int index = 0;
                 int nextChar;
                 unsigned char bufllwrite[MAX_PAYLOAD_SIZE] = {0};
                 while(index<MAX_PAYLOAD_SIZE){
                     nextChar = getc(fileCheck);
                     if(nextChar==EOF){
+                        printf("--here--\n");
                         bufllwrite[index] = nextChar;
-                        bufllwrite[index+1] = '\n';
-                        STOP = FALSE;
-                        break;
+                        //bufllwrite[index+1] = '\n';
+                        index = index + 1;
                     }
                     else{
                         bufllwrite[index] = nextChar;
@@ -87,11 +94,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
                     trys++;
                 }
+                total = total + checkllwrite;
                 if(trys==nTries){
                     printf("error!\n");
                     return;
-                }
-                
+                }   
             }
             fclose(fileCheck);
             }
@@ -99,6 +106,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         case LlRx:
             {
             sleep(1);
+
+            //apagar filename received, is not used
             unsigned char filenameReceived[MAX_PAYLOAD_SIZE] = {0};
             unsigned char size[MAX_PAYLOAD_SIZE] = {0};
             
@@ -108,7 +117,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 return;
             }
             int STOP = TRUE;
-            FILE *newFile = fopen("penguin-received.gif", "wb");//CHANGE
+            FILE *newFile = fopen(filename, "wb");//CHANGE
             sizeOfFile = atol(size);
             if(newFile==NULL){
                 printf("error opening file\n");

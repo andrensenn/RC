@@ -20,6 +20,8 @@ int alarmEnabled = FALSE;
 int alarmCount = 0;
 int curInfFram = 0;
 int curInfFramR = 0;
+int timeout = 0;
+int nTrys = 0;
 
 
 void alarmHandler(int signal){
@@ -218,12 +220,14 @@ int getControlPacket(char *filename, char *filesize){
                         }
                         
                     }
+                    /*
                     if(curReading==0){
                             filesize[i] = "\n";
                         }
                     else if(curReading==1){
                             filename[i] = "\n";
                     }
+                    */
                     curState = T;
                     }
                     break;
@@ -249,8 +253,8 @@ int llopen(LinkLayer connectionParameters){
     connectionParameters.baudRate) < 0){
         return -1;
     }
-    int nTrys = connectionParameters.nRetransmissions;
-    int timeout = connectionParameters.timeout;
+    nTrys = connectionParameters.nRetransmissions;
+    timeout = connectionParameters.timeout;
     switch(connectionParameters.role){
         case LlTx: {
 
@@ -655,10 +659,11 @@ int llopen(LinkLayer connectionParameters){
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
-
+    
+    signal(SIGALRM, alarmHandler);
     //if firstIn = True não vamos ler, vamos logo escrever, se não lêmos primeiro par ver os I(0|1) etc
     unsigned char bufSend[MAX_PAYLOAD_SIZE*2 + 6] = {0}; //creating the buf to send
-
+    //inicio
     bufSend[0] = FLAG;
     bufSend[1] = ADDRESS_SENDER;
     //I0 or I1
@@ -707,8 +712,18 @@ int llwrite(const unsigned char *buf, int bufSize)
     int a;
     int c;
     unsigned char answer[MAX_PAYLOAD_SIZE] = {0};
-    while(TRUE){
+    alarm(timeout);
+    alarmEnabled = TRUE;
+    alarmCount = 0;
+    while(alarmCount<nTrys){
         int checkRead = readByteSerialPort(answer);
+        if(alarmEnabled==FALSE){
+            printf("Trying again...\n");
+            checkWrite = writeBytesSerialPort(bufSend,size);
+            if (checkWrite==-1) return -1;
+            alarm(timeout);
+            alarmEnabled = TRUE;
+        }
         if(checkRead>0){
             switch (curState){
                 case Other_RCV:
@@ -747,6 +762,9 @@ int llwrite(const unsigned char *buf, int bufSize)
                     break;
                 case BBC_ok:
                     if(answer[0]==FLAG){
+                        printf("here\n");
+                        alarm(0);
+                        alarmEnabled = FALSE;
                         if(curInfFram==0 && c==RR1){
                             printf("packet was confirmed!\n");
                             curInfFram = 1;
@@ -779,7 +797,7 @@ int llwrite(const unsigned char *buf, int bufSize)
             }   
         }
     }
-    
+    //fim 
     return 0;
 }
 
