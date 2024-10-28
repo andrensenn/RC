@@ -53,33 +53,26 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             //int checkllwrite = llwrite(test,15);
             //test end
             
-            FILE *fileChecksize = fopen(filename, "r"); 
-            if(fileChecksize==NULL){
-                printf("error opening file\n");
-                return -1;
-            }
-            fseek(fileChecksize, 0, SEEK_END);
-            long filesize = ftell(fileChecksize);
-            int total = 0;
-            fclose(fileChecksize);
-
-
             FILE *fileCheck = fopen(filename, "r"); 
             if(fileCheck==NULL){
                 printf("error opening file\n");
                 return -1;
             }
-            while(total<filesize){
+
+            //fseek(fileCheck, 0, SEEK_END);
+            
+            int STOP = TRUE;
+            while(STOP){
                 int index = 0;
                 int nextChar;
                 unsigned char bufllwrite[MAX_PAYLOAD_SIZE] = {0};
                 while(index<MAX_PAYLOAD_SIZE){
                     nextChar = getc(fileCheck);
                     if(nextChar==EOF){
-                        printf("--here--\n");
                         bufllwrite[index] = nextChar;
-                        //bufllwrite[index+1] = '\n';
-                        index = index + 1;
+                        bufllwrite[index+1] = '\n';
+                        STOP = FALSE;
+                        break;
                     }
                     else{
                         bufllwrite[index] = nextChar;
@@ -87,22 +80,23 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     }
                 }
                 int checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);//if -1 written, send again
-                printf("%d\n", checkllwrite);
                 int trys = 1;
                 while(checkllwrite==-1 && trys < nTries){
                     printf("rewritting packet!\n");
                     checkllwrite = llwrite(bufllwrite,MAX_PAYLOAD_SIZE);
                     trys++;
                 }
-                total = total + checkllwrite;
                 if(trys==nTries){
                     printf("error!\n");
                     return;
-                }   
+                }
+                
             }
             fclose(fileCheck);
             }
+            llclose(0);
             break;
+
         case LlRx:
             {
             sleep(1);
@@ -124,21 +118,33 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 return -1;
             }
             unsigned long total = 0;
-            int i = 0;
             while(STOP){
                 unsigned char read[MAX_PAYLOAD_SIZE] = {0};
                 int checkRead = llread(read);
                 while(checkRead==-1){
                     checkRead = llread(read);
                 }
-                size_t bytesWritten = fwrite(read, 1, checkRead, newFile);
+                if(sizeOfFile-total>1000){
+                    size_t bytesWritten = fwrite(read, 1, checkRead, newFile);
         
-                if(bytesWritten!=checkRead) {
-                    printf("error writting to the file\n");
-                    fclose(newFile);
-                    return -1;
+                    if(bytesWritten!=checkRead) {
+                        printf("error writting to the file\n");
+                        fclose(newFile);
+                        return -1;
+                    }
                 }
-               
+                else{
+
+                    int index = 0;
+                    while(total<sizeOfFile){
+                        char ch = read[index];
+                        fwrite(&ch, 1, sizeof ch, newFile);
+                        
+                        total++;
+                        index++;
+                    }
+
+                }
                 total = total + checkRead;
                 if(total >= sizeOfFile) {
                     STOP = FALSE;
@@ -160,7 +166,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             //end test
             
             }
+            llclose(0);
             break;
-
     }
 }
