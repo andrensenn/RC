@@ -12,6 +12,7 @@
 #include "link_layer.h"
 #include "serial_port.h"
 #include "../include/consts.h"
+#include "../include/statistics.h"
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
@@ -24,6 +25,7 @@ int timeout = 0;
 int nTrys = 0;
 LinkLayerRole role;
 
+extern struct statistic stats;
 
 void alarmHandler(int signal){
         alarmEnabled = FALSE;
@@ -1046,6 +1048,14 @@ int llclose(int showStatistics)
                     return -1;
                 }        
             }
+
+            // Final Statistics
+            time_t ending;
+            stats.end_time = time(&ending);
+            if(showStatistics==TRUE){
+                printStatistics(stats);
+            }
+
             break;
         }
         case LlRx:{
@@ -1141,5 +1151,6 @@ int llclose(int showStatistics)
     if(clstat==-1){
         printf("error on llclose\n");
     }
+
     return clstat;
 }

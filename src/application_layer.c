@@ -6,11 +6,22 @@
 #include <string.h>
 #include <stdlib.h>
 #include "../include/consts.h"
+#include "../include/statistics.h"
 
+struct statistic stats = {0};
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
     {
+    
+    // Initialize Stats
+   // struct statistic stats = {0};
+
+    time_t starting;
+    stats.start_time = time(&starting);
+    stats.link_capacity = baudRate;
+
+
     unsigned long sizeOfFile;
     LinkLayer args;
     strcpy(args.serialPort, serialPort);
@@ -90,11 +101,27 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     printf("error!\n");
                     return;
                 }
-                
+
+                stats.retransmission_total = trys;
+                stats.information_frame_size = index;
+                stats.timeout_total = timeout; // not sure (max or total used?)
+                stats.bytes_total = sizeOfFile;
+                stats.bits_total = stats.bytes_total * 8;
+                stats.link_capacity = baudRate;
+
             }
             fclose(fileCheck);
             }
+
             llclose(0);
+
+            /* Final Statistics
+            time_t ending;
+            stats.end_time = time(&ending);*/
+            
+
+            logStatistics(stats);
+
             break;
 
         case LlRx:
@@ -167,6 +194,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             
             }
             llclose(0);
+            
             break;
     }
+
 }
